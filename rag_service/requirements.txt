@@ -1,0 +1,24 @@
+# --- API ---
+fastapi
+uvicorn
+python-multipart      # needed by FastAPI for file uploads (UploadFile / Form)
+pydantic
+requests
+python-dotenv
+
+# --- retrieval ---
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-huggingface
+faiss-cpu
+pymupdf               # PDF loading (PyMuPDFLoader)
+rank-bm25
+sentence-transformers # BGE-M3 embeddings + cross-encoder reranker
+torch
+spacy                 # BM25 preprocessing
+# after installing, also run:  python -m spacy download en_core_web_sm
+
+# --- LLMs used by the RAG chat flow (rewriter / router / answer) ---
+langchain-ollama      # local Qwen via Ollama
+langchain-google-genai  # Gemini query router (needs GOOGLE_API_KEY in .env)
