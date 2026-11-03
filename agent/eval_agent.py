@@ -48,6 +48,11 @@ def score_task(task, traj):
 
     ok_calls = [tc for s in traj["steps"] for tc in s["tool_calls"] if tc["status"] == "ok"]
     called = {tc["name"] for tc in ok_calls}
+
+    # An answer only counts if the agent actually searched when the task needs retrieval
+    # (otherwise it may just be answering from memory and matching keywords by luck).
+    if "retrieve" in task.get("expected_tools", []) and "retrieve" not in called:
+        success = False
     tools_ok = all(t in called for t in task.get("expected_tools", []))
 
     docs_ok = True
@@ -113,14 +118,15 @@ def run_mode(mode, tasks, args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tasks", default="tasks.jsonl")
+    here = os.path.dirname(os.path.abspath(__file__))   # always relative to this file, not to where you run it from
+    ap.add_argument("--tasks", default=os.path.join(here, "tasks.jsonl"))
     ap.add_argument("--session", default="chat_1")
     ap.add_argument("--rag-url", default="http://127.0.0.1:8000")
     ap.add_argument("--model", default="qwen2.5:7b")
-    ap.add_argument("--mode", choices=["agentic", "baseline", "both"], default="both")
+    ap.add_argument("--mode", choices=["agentic", "agentic_v1", "baseline", "guarded", "both", "all"], default="both")
     ap.add_argument("--max-steps", type=int, default=6)
     ap.add_argument("--num-ctx", type=int, default=8192)
-    ap.add_argument("--out", default="results")
+    ap.add_argument("--out", default=os.path.join(here, "results"))
     ap.add_argument("--limit", type=int, default=None, help="only run the first N tasks")
     args = ap.parse_args()
 
@@ -129,7 +135,8 @@ def main():
         tasks = tasks[:args.limit]
     os.makedirs(args.out, exist_ok=True)
     stamp = time.strftime("%Y%m%d_%H%M%S")
-    modes = ["baseline", "agentic"] if args.mode == "both" else [args.mode]
+    modes = {"both": ["baseline", "agentic"],
+             "all": ["baseline", "agentic_v1", "agentic"]}.get(args.mode, [args.mode])
 
     summaries = {}
     for mode in modes:
@@ -143,11 +150,12 @@ def main():
             json.dump({"summary": summaries[mode], "rows": rows}, f, indent=2)
         print_summary(f"{mode.upper()} ({args.model})", summaries[mode])
 
-    if len(modes) == 2:
-        b, a = summaries["baseline"]["overall"], summaries["agentic"]["overall"]
-        print(f"\nBaseline -> Agentic: success {b['success']} -> {a['success']}, "
-              f"tool accuracy {b['tool_acc']} -> {a['tool_acc']}, "
-              f"avg steps {b['avg_steps']} -> {a['avg_steps']}")
+    if len(modes) > 1:
+        print("\n=== COMPARISON (overall) ===")
+        print(f"{'mode':<12}{'success':>9}{'tool_acc':>10}{'avg_steps':>11}{'loops':>7}")
+        for m in modes:
+            o = summaries[m]["overall"]
+            print(f"{m:<12}{o['success']:>9}{o['tool_acc']:>10}{o['avg_steps']:>11}{o['loop_rate']:>7}")
 
 
 if __name__ == "__main__":

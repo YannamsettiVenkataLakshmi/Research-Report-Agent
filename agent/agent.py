@@ -20,7 +20,7 @@ import requests
 
 from tools import Tools, ToolError, TOOL_SCHEMAS
 
-PROMPT_AGENTIC = """You are a research assistant answering questions about documents the user uploaded.
+PROMPT_AGENTIC_V1 = """You are a research assistant answering questions about documents the user uploaded.
 
 Tools: list_documents, retrieve, calculator.
 
@@ -33,9 +33,28 @@ Rules:
 6. If the question is ambiguous about which document is meant, say which documents are available.
 7. Use calculator for arithmetic."""
 
+PROMPT_AGENTIC = """You are a research assistant answering questions about documents the user uploaded.
+
+Tools: list_documents, retrieve, calculator.
+
+Rules:
+1. ALWAYS call retrieve before answering any question about the content of the documents. Never answer such questions from memory, and never say a document has no relevant information unless you actually searched it.
+2. If the question does not name a specific document, or could refer to several, call list_documents first.
+3. For a question about ONE document, call retrieve restricted to that document.
+4. To compare or combine SEVERAL documents, make a SEPARATE retrieve call for EACH document, each with a focused question about that document. Do not answer until every document has been searched.
+5. If the passages do not answer the question, rewrite the query using specific technical terms the document would actually use (not words like 'paper' or 'summary') and retrieve again. Make at most 3 retrieve calls per question.
+6. Answer ONLY from retrieved passages and mention the filename you used. If nothing relevant was found after retrying, say you could not find it in the documents.
+7. If the question is ambiguous about which document is meant, say which documents are available, or cover each of them.
+8. Use calculator for arithmetic."""
+
 PROMPT_BASELINE = """You are a research assistant answering questions about documents the user uploaded.
 Use the retrieve tool to search the documents, then answer using only the retrieved passages.
 If the passages do not contain the answer, say you could not find it."""
+
+
+NUDGE = ("You have not searched the documents yet, so you cannot answer from them. "
+         "Call retrieve now (restrict it to the relevant document if you know which one). "
+         "If you do not know which document is meant, call list_documents first, then retrieve.")
 
 
 def extract_tool_calls(msg):
@@ -84,10 +103,12 @@ class OllamaClient:
 
 
 class Agent:
-    def __init__(self, tools, llm, mode="agentic", max_steps=6, max_retrievals=None):
+    def __init__(self, tools, llm, mode="agentic", max_steps=6, max_retrievals=None, require_retrieval=None):
         self.tools, self.llm, self.mode, self.max_steps = tools, llm, mode, max_steps
-        self.max_retrievals = max_retrievals if max_retrievals is not None else (3 if mode == "agentic" else 1)
-        self.system_prompt = PROMPT_AGENTIC if mode == "agentic" else PROMPT_BASELINE
+        self.max_retrievals = max_retrievals if max_retrievals is not None else (1 if mode == "baseline" else 3)
+        self.system_prompt = {"baseline": PROMPT_BASELINE, "agentic_v1": PROMPT_AGENTIC_V1}.get(mode, PROMPT_AGENTIC)
+        # "guarded" = the agentic prompt + a loop rule: no final answer before at least one search
+        self.require_retrieval = require_retrieval if require_retrieval is not None else (mode == "guarded")
 
     def _execute(self, call, state):
         name, args = call["name"], call["arguments"]
@@ -107,6 +128,8 @@ class Agent:
                 text, rec["meta"] = self.tools.run(name, args)
                 if name == "retrieve":
                     state["retrievals"] += 1
+                elif name == "calculator":
+                    state["calc_ok"] += 1
             except ToolError as exc:
                 rec["status"], text = "error", f"Error: {exc}"
             except Exception as exc:  # never let a tool crash the run
@@ -121,7 +144,7 @@ class Agent:
                     {"role": "user", "content": question}]
         traj = {"question": question, "mode": self.mode, "steps": [], "final_answer": None,
                 "status": "max_steps", "error": None}
-        state = {"seen": set(), "retrievals": 0}
+        state = {"seen": set(), "retrievals": 0, "calc_ok": 0, "nudges": 0}
         started = time.time()
 
         for step_no in range(1, self.max_steps + 1):
@@ -136,11 +159,19 @@ class Agent:
             step = {"step": step_no, "llm_latency_s": round(time.time() - t0, 3),
                     "prompt_tokens": resp.get("prompt_eval_count") or 0,
                     "completion_tokens": resp.get("eval_count") or 0,
-                    "parse_fallback": fallback, "assistant_text": (msg.get("content") or "")[:500],
+                    "parse_fallback": fallback, "nudged": False, "assistant_text": (msg.get("content") or "")[:500],
                     "tool_calls": []}
             traj["steps"].append(step)
 
             if not calls:
+                if (self.require_retrieval and state["retrievals"] == 0
+                        and state["calc_ok"] == 0 and state["nudges"] == 0):
+                    # The model tried to answer without searching. Send it back, once.
+                    state["nudges"] += 1
+                    step["nudged"] = True
+                    messages.append(msg)
+                    messages.append({"role": "user", "content": NUDGE})
+                    continue
                 traj["final_answer"] = (msg.get("content") or "").strip()
                 traj["status"] = "answered"
                 break
@@ -171,6 +202,7 @@ class Agent:
             "errors": sum(1 for c in calls_all if c["status"] == "error"),
             "repeated": sum(1 for c in calls_all if c["status"] == "repeated"),
             "capped": sum(1 for c in calls_all if c["status"] == "capped"),
+            "nudges": state["nudges"],
             "prompt_tokens": sum(s["prompt_tokens"] for s in traj["steps"]),
             "completion_tokens": sum(s["completion_tokens"] for s in traj["steps"]),
             "latency_s": round(time.time() - started, 2),
@@ -184,7 +216,7 @@ def main():
     ap.add_argument("--session", default="chat_1")
     ap.add_argument("--rag-url", default="http://127.0.0.1:8000")
     ap.add_argument("--model", default="qwen2.5:7b")
-    ap.add_argument("--mode", choices=["agentic", "baseline"], default="agentic")
+    ap.add_argument("--mode", choices=["agentic", "agentic_v1", "baseline", "guarded"], default="agentic")
     ap.add_argument("--max-steps", type=int, default=6)
     a = ap.parse_args()
 

@@ -126,3 +126,45 @@ def test_scoring_refusal_and_summary():
     assert row["success"]
     s = summarize([row])
     assert s["overall"]["n"] == 1 and "not_in_docs" in s["by_type"]
+
+
+def test_answer_without_searching_does_not_count_as_success():
+    # keywords are present, but the agent never called retrieve -> must NOT be a success
+    task = {"id": "q02", "type": "vague", "must_contain_groups": [["neural"]],
+            "expected_tools": ["retrieve"], "expected_docs": ["curriculum"]}
+    agent, _ = make([final("The curriculum covers neural networks.")])
+    row = score_task(task, agent.run("what is in the curriculum?"))
+    assert row["success"] is False and row["retrievals"] == 0
+
+
+def test_modes_use_different_prompts_and_retrieval_caps():
+    from agent import PROMPT_AGENTIC, PROMPT_AGENTIC_V1, PROMPT_BASELINE
+    a2, _ = make([], mode="agentic")
+    a1, _ = make([], mode="agentic_v1")
+    b, _ = make([], mode="baseline")
+    assert a2.system_prompt == PROMPT_AGENTIC and a1.system_prompt == PROMPT_AGENTIC_V1 and b.system_prompt == PROMPT_BASELINE
+    assert (a2.max_retrievals, a1.max_retrievals, b.max_retrievals) == (3, 3, 1)
+    assert "ALWAYS call retrieve" in PROMPT_AGENTIC and "ALWAYS call retrieve" not in PROMPT_AGENTIC_V1
+
+
+def test_guarded_mode_sends_the_model_back_once_if_it_answers_without_searching():
+    agent, http = make([final("quick answer from memory"), call("retrieve", query="x"), final("grounded answer")],
+                       mode="guarded")
+    t = agent.run("q")
+    assert t["status"] == "answered" and t["final_answer"] == "grounded answer"
+    assert t["totals"]["nudges"] == 1 and t["totals"]["retrievals"] == 1 and len(http.posts) == 1
+
+
+def test_guard_nudges_only_once_and_not_in_other_modes():
+    agent, _ = make([final("answer one"), final("answer two")], mode="guarded")
+    t = agent.run("q")
+    assert t["totals"]["nudges"] == 1 and t["final_answer"] == "answer two"      # second answer is accepted
+    agent, _ = make([final("answer one")], mode="agentic")
+    t = agent.run("q")
+    assert t["totals"]["nudges"] == 0 and t["final_answer"] == "answer one"
+
+
+def test_guard_allows_calculator_only_answers():
+    agent, _ = make([call("calculator", expression="2+2"), final("4")], mode="guarded")
+    t = agent.run("what is 2+2?")
+    assert t["totals"]["nudges"] == 0 and t["final_answer"] == "4"
