@@ -22,14 +22,58 @@ import os
 import time
 from collections import defaultdict
 
+import requests
+
 from agent import Agent, OllamaClient
 from tools import Tools
 
 REFUSALS = ["could not find", "couldn't find", "cannot find", "can't find", "unable to find",
-            "not contain", "no information", "not mentioned", "does not provide", "not provide",
+            "not contain", "no information", "not mention", "does not provide", "not provide",
             "not specify", "does not state", "not stated", "no mention", "not included",
-            "isn't mentioned", "not available", "not described", "does not describe",
-            "not discuss", "does not say", "no relevant"]
+            "not available", "not described", "does not describe", "not discuss", "does not say",
+            "no relevant", "not recommend", "not give", "not list", "no specific", "no explicit",
+            "no recommendation", "not explicitly", "not offer",
+            "n't contain", "n't provide", "n't mention", "n't specify", "n't state", "n't recommend",
+            "n't give", "n't say", "n't list", "n't describe", "n't discuss", "n't offer"]
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def collect_provenance(args, tasks_path):
+    """Record the state of the system a run was made against, so differences between runs can be explained."""
+    import hashlib
+    import platform
+    import subprocess
+
+    def git(*cmd):
+        try:
+            return subprocess.check_output(["git", *cmd], cwd=HERE, stderr=subprocess.DEVNULL,
+                                           text=True, timeout=5).strip()
+        except Exception:
+            return None
+
+    status = git("status", "--porcelain")
+    prov = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "model": args.model, "num_ctx": args.num_ctx, "max_steps": args.max_steps,
+        "tasks_file": os.path.basename(tasks_path),
+        "git_commit": git("rev-parse", "--short", "HEAD"),
+        "git_dirty": None if status is None else bool(status),
+        "python": platform.python_version(),
+    }
+    try:
+        prov["tasks_sha1"] = hashlib.sha1(open(tasks_path, "rb").read()).hexdigest()[:10]
+    except Exception:
+        prov["tasks_sha1"] = None
+    try:
+        r = requests.get(f"{args.rag_url.rstrip('/')}/documents", params={"session_id": args.session}, timeout=10)
+        docs = r.json()["documents"]
+        prov["n_documents"] = len(docs)
+        prov["docs_hash"] = hashlib.sha1(json.dumps(sorted((d["filename"], d.get("preview", "")) for d in docs)).encode()).hexdigest()[:10]
+    except Exception:
+        prov["n_documents"], prov["docs_hash"] = None, None
+    return prov
 
 
 def load_tasks(path):
@@ -38,7 +82,7 @@ def load_tasks(path):
 
 
 def score_task(task, traj):
-    answer = (traj.get("final_answer") or "").lower()
+    answer = (traj.get("final_answer") or "").lower().replace("\u2019", "'")
 
     if task.get("expect_refusal"):
         success = any(m in answer for m in REFUSALS)
@@ -131,6 +175,7 @@ def main():
     args = ap.parse_args()
 
     tasks = load_tasks(args.tasks)
+    prov = collect_provenance(args, args.tasks)
     if args.limit:
         tasks = tasks[:args.limit]
     os.makedirs(args.out, exist_ok=True)
@@ -147,7 +192,7 @@ def main():
             for t in trajs:
                 f.write(json.dumps(t, ensure_ascii=False) + "\n")
         with open(os.path.join(args.out, f"{tag}_scores.json"), "w") as f:
-            json.dump({"summary": summaries[mode], "rows": rows}, f, indent=2)
+            json.dump({"summary": summaries[mode], "rows": rows, "provenance": prov}, f, indent=2)
         print_summary(f"{mode.upper()} ({args.model})", summaries[mode])
 
     if len(modes) > 1:

@@ -11,13 +11,18 @@ import json
 import os
 import sys
 
-task_id = sys.argv[1] if len(sys.argv) > 1 else None
-mode = sys.argv[2] if len(sys.argv) > 2 else "agentic"
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+sub = "results"
+if "--dir" in sys.argv:
+    sub = sys.argv[sys.argv.index("--dir") + 1]
+    args = [a for a in args if a != sub]
+task_id = args[0] if len(args) > 0 else None
+mode = args[1] if len(args) > 1 else "agentic"
 if not task_id:
     sys.exit("usage: python agent/show_trajectory.py <task_id> [baseline|agentic_v1|agentic]")
 
 here = os.path.dirname(os.path.abspath(__file__))
-files = sorted(glob.glob(os.path.join(here, "results", f"{mode}_*_trajectories.jsonl")), key=os.path.getmtime)
+files = sorted(glob.glob(os.path.join(here, sub, f"{mode}_*_trajectories.jsonl")), key=os.path.getmtime)
 if not files:
     sys.exit(f"No results found for mode '{mode}'. Run eval_agent.py first.")
 

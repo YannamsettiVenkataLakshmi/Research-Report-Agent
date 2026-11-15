@@ -11,14 +11,20 @@ import sys
 from collections import defaultdict
 
 here = os.path.dirname(os.path.abspath(__file__))
-results_dir = os.path.join(here, "results")
-model_filter = sys.argv[1] if len(sys.argv) > 1 else ""
+import argparse
+_ap = argparse.ArgumentParser()
+_ap.add_argument("model_filter", nargs="?", default="")
+_ap.add_argument("--dir", default="results", help="results folder inside agent/ (default: results)")
+_ap.add_argument("--tasks", default="tasks.jsonl", help="task file inside agent/ (default: tasks.jsonl)")
+_args = _ap.parse_args()
+results_dir = os.path.join(here, _args.dir)
+model_filter = _args.model_filter
 
 MODES = ["baseline", "agentic_v1", "agentic", "guarded"]
 MATCH_ORDER = sorted(MODES, key=len, reverse=True)      # so "agentic_v1_..." is not mistaken for "agentic_..."
 
 questions = {}
-tasks_path = os.path.join(here, "tasks.jsonl")
+tasks_path = os.path.join(here, _args.tasks)
 if os.path.exists(tasks_path):
     for line in open(tasks_path):
         if line.strip():

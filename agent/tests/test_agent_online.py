@@ -168,3 +168,30 @@ def test_guard_allows_calculator_only_answers():
     agent, _ = make([call("calculator", expression="2+2"), final("4")], mode="guarded")
     t = agent.run("what is 2+2?")
     assert t["totals"]["nudges"] == 0 and t["final_answer"] == "4"
+
+
+def test_refusal_check_accepts_natural_phrasings_and_curly_apostrophes():
+    task = {"id": "h04", "type": "not_in_docs", "expect_refusal": True, "expected_tools": ["retrieve"]}
+    for answer in ["The curriculum does not recommend a specific batch size.",
+                   "The slides don\u2019t mention a year.",
+                   "There is no specific number given in the document."]:
+        agent, _ = make([call("retrieve", query="x"), final(answer)])
+        assert score_task(task, agent.run("q"))["success"], answer
+    agent, _ = make([call("retrieve", query="x"), final("The batch size is 32.")])
+    assert not score_task(task, agent.run("q"))["success"]
+
+
+def test_trajectory_keeps_full_retrieved_text():
+    agent, _ = make([call("retrieve", query="x"), final("ok")])
+    rec = agent.run("q")["steps"][0]["tool_calls"][0]
+    assert "U-Net semantic segmentation" in rec["result_full"]
+
+
+def test_provenance_is_recorded_and_never_crashes():
+    from types import SimpleNamespace
+    from eval_agent import collect_provenance
+    args = SimpleNamespace(model="qwen2.5:7b", num_ctx=8192, max_steps=6, rag_url="http://127.0.0.1:1", session="s1")
+    prov = collect_provenance(args, os.path.join(os.path.dirname(__file__), "..", "tasks.jsonl"))
+    assert prov["model"] == "qwen2.5:7b" and prov["tasks_sha1"]
+    assert prov["n_documents"] is None                     # server not reachable -> recorded as unknown, no crash
+    assert "git_commit" in prov and "git_dirty" in prov

@@ -137,6 +137,7 @@ class Agent:
         state["seen"].add(key)
         rec["latency_s"] = round(time.time() - t0, 3)
         rec["result_preview"] = text[:300]
+        rec["result_full"] = text[:6000]
         return rec, text
 
     def run(self, question):
