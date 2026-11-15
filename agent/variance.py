@@ -36,17 +36,30 @@ files.sort(key=os.path.getmtime)
 if not files:
     sys.exit(f"No '{a.mode}' runs found in agent/{a.dir}")
 
-runs = []                                   # list of {task_id: bool}
+from eval_agent import invalid_run, rag_broken, no_search_run   # noqa: E402
+
+runs, kept = [], []                         # runs: list of {task_id: bool}
 for f in files:
-    res = {}
+    res, statuses, trs, rws = {}, [], [], []
     for line in open(f):
         if not line.strip():
             continue
         tr = json.loads(line)
+        statuses.append(tr.get("status"))
+        trs.append(tr)
         task = tasks.get(tr.get("task_id"))
         if task:
-            res[task["id"]] = bool(score_task(task, tr)["success"])
+            row = score_task(task, tr)
+            res[task["id"]] = bool(row["success"])
+            rws.append(row)
+    if invalid_run(statuses) or rag_broken(trs) or no_search_run(rws):
+        print(f"(skipping invalid run: {os.path.basename(f)} - the model or the RAG API was failing)")
+        continue
     runs.append(res)
+    kept.append(f)
+files = kept
+if not files:
+    sys.exit("No valid runs found.")
 
 print(f"{len(runs)} run(s) of mode '{a.mode}' in agent/{a.dir}\n")
 rates = []

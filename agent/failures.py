@@ -51,8 +51,19 @@ for f in glob.glob(os.path.join(here, a.dir, f"{a.mode}_*_trajectories.jsonl")):
     files.append(f)
 if not files:
     sys.exit(f"No '{a.mode}' trajectories in agent/{a.dir}. Run eval_agent.py first.")
-path = max(files, key=os.path.getmtime)
-trajs = [json.loads(l) for l in open(path) if l.strip()]
+from eval_agent import invalid_run, rag_broken, no_search_run   # noqa: E402
+
+path, trajs = None, []
+for cand in sorted(files, key=os.path.getmtime, reverse=True):
+    trs = [json.loads(l) for l in open(cand) if l.strip()]
+    rws = [score_task(tasks[t["task_id"]], t) for t in trs if t.get("task_id") in tasks]
+    if invalid_run(t.get("status") for t in trs) or rag_broken(trs) or no_search_run(rws):
+        print(f"(skipping invalid run: {os.path.basename(cand)} - the model or the RAG API was failing)")
+        continue
+    path, trajs = cand, trs
+    break
+if path is None:
+    sys.exit("No valid runs found.")
 print(f"FILE: {os.path.basename(path)}  ({len(trajs)} tasks)\n")
 
 counts = {"RETRIEVAL MISS": 0, "GENERATION MISS": 0, "OTHER": 0, "UNKNOWN": 0}

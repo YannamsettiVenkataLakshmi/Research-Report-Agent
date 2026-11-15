@@ -1,0 +1,41 @@
+(skipping invalid run: baseline_qwen2.5-7b_20261115_170903_scores.json - the model or the RAG API was failing)
+(skipping invalid run: agentic_v1_qwen2.5-7b_20261115_170903_scores.json - the model or the RAG API was failing)
+(skipping invalid run: agentic_qwen2.5-7b_20261115_170903_scores.json - the model or the RAG API was failing)
+(skipping invalid run: baseline_qwen2.5-7b_20261115_171215_scores.json - the model or the RAG API was failing)
+(skipping invalid run: agentic_v1_qwen2.5-7b_20261115_171215_scores.json - the model or the RAG API was failing)
+(skipping invalid run: agentic_qwen2.5-7b_20261115_171215_scores.json - the model or the RAG API was failing)
+
+OVERALL
+mode           n  success  tool_acc  steps  tokens
+baseline      16     0.38      0.19   1.75    1185
+agentic_v1    16     0.88      0.88   2.94    2849
+agentic       16     0.81      0.94   3.00    3017
+guarded       16     0.88      1.00   3.12    3179
+
+SUCCESS BY TASK TYPE  (passed / total)
+type              baseline  agentic_v1     agentic     guarded
+ambiguous              0/1         0/1         0/1         0/1
+comparison             1/1         1/1         1/1         1/1
+mixed                  0/1         1/1         1/1         1/1
+not_in_docs            2/2         2/2         2/2         2/2
+single_doc            3/11       10/11        9/11       10/11
+
+baseline  ->  agentic:  7 fixed, 0 newly failing
+  fixed         h03  [single_doc]  Whose idea of aspiration as a 'navigational capacity' does the Aspirat
+  fixed         h06  [single_doc]  What regularization techniques are listed in the curriculum?
+  fixed         h08  [single_doc]  What does the Aspirational Indianhood deck say technological backwardn
+  fixed         h10  [single_doc]  Which tokenization strategies does the curriculum associate with BERT 
+  fixed         h12  [single_doc]  Which autobiography do the Aspirational Indianhood discussion question
+  fixed         h13  [mixed]  In the lunar landing paper's Table 1, what is the product of the initi
+  fixed         h14  [single_doc]  What pre-training objectives does the curriculum list for transformers
+
+agentic  ->  guarded:  1 fixed, 0 newly failing
+  fixed         h02  [single_doc]  Which generative models does the curriculum list?
+
+FAILED IN EVERY MODE (2): h09, h11
+
+EXPORTED (newest valid run of each mode):
+  baseline_qwen2.5-7b_20261115_180930_scores.json  ->  docs/results/heldout_baseline_scores.json
+  agentic_v1_qwen2.5-7b_20261115_180930_scores.json  ->  docs/results/heldout_agentic_v1_scores.json
+  agentic_qwen2.5-7b_20261115_180930_scores.json  ->  docs/results/heldout_agentic_scores.json
+  guarded_qwen2.5-7b_20261115_210722_scores.json  ->  docs/results/heldout_guarded_scores.json

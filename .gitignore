@@ -18,3 +18,5 @@ rag_service/src/check_models.py
 rag_service/src/test.py
 rag_service/src/test_*.py
 rag_service/src/*_test.py
+agent/results_heldout/
+agent/results/

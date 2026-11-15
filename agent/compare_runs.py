@@ -15,10 +15,15 @@ import argparse
 _ap = argparse.ArgumentParser()
 _ap.add_argument("model_filter", nargs="?", default="")
 _ap.add_argument("--dir", default="results", help="results folder inside agent/ (default: results)")
+_ap.add_argument("--export", default=None, help="copy the newest VALID score file of each mode into this folder")
+_ap.add_argument("--prefix", default="run", help="file name prefix used with --export")
 _ap.add_argument("--tasks", default="tasks.jsonl", help="task file inside agent/ (default: tasks.jsonl)")
 _args = _ap.parse_args()
 results_dir = os.path.join(here, _args.dir)
 model_filter = _args.model_filter
+
+sys.path.insert(0, here)
+from eval_agent import invalid_run, rows_broken, no_search_run   # noqa: E402
 
 MODES = ["baseline", "agentic_v1", "agentic", "guarded"]
 MATCH_ORDER = sorted(MODES, key=len, reverse=True)      # so "agentic_v1_..." is not mistaken for "agentic_..."
@@ -31,7 +36,7 @@ if os.path.exists(tasks_path):
             t = json.loads(line)
             questions[t["id"]] = t["question"]
 
-runs = {}
+runs, run_files = {}, {}
 files = sorted(glob.glob(os.path.join(results_dir, "*_scores.json")), key=os.path.getmtime)
 for f in files:
     name = os.path.basename(f)
@@ -39,7 +44,12 @@ for f in files:
         continue
     mode = next((m for m in MATCH_ORDER if name.startswith(m + "_")), None)
     if mode:
-        runs[mode] = {r["id"]: r for r in json.load(open(f))["rows"]}      # newest file wins
+        rows = json.load(open(f))["rows"]
+        if invalid_run(r["status"] for r in rows) or rows_broken(rows) or no_search_run(rows):
+            print(f"(skipping invalid run: {name} - the model or the RAG API was failing)")
+            continue
+        runs[mode] = {r["id"]: r for r in rows}      # newest VALID file wins
+        run_files[mode] = f
 
 if not runs:
     sys.exit(f"No *_scores.json files found in {results_dir}")
@@ -77,3 +87,13 @@ for a, b in pairs:
 
 still = [i for i in runs[modes[0]] if all(i in runs[m] and not runs[m][i]["success"] for m in modes)]
 print(f"\nFAILED IN EVERY MODE ({len(still)}): " + ", ".join(sorted(still)))
+
+
+if _args.export:
+    import shutil
+    os.makedirs(_args.export, exist_ok=True)
+    print("\nEXPORTED (newest valid run of each mode):")
+    for m in modes:
+        dest = os.path.join(_args.export, f"{_args.prefix}_{m}_scores.json")
+        shutil.copy(run_files[m], dest)
+        print(f"  {os.path.basename(run_files[m])}  ->  {dest}")
