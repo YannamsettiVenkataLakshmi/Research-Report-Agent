@@ -1,6 +1,6 @@
 import spacy
 import re
-from src.technical_patterns import TECH_PATTERNS
+from rag_service.src.technical_patterns import TECH_PATTERNS
 
 nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 

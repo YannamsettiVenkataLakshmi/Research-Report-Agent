@@ -1,5 +1,5 @@
-from src.agent import create_agent
-from src.rag_pipeline import process_query
+from rag_service.src.agent import create_agent
+from rag_service.src.rag_pipeline import process_query
 
 
 session_id = "chat_1"

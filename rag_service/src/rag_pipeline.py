@@ -1,9 +1,9 @@
 import re
 import requests
 
-from src.document_registry import load_registry, REGISTRY_PATH
-from src.query_rewriter import create_rewriter, rewrite_query
-from src.query_router import create_router, route_query
+from rag_service.src.document_registry import load_registry, REGISTRY_PATH
+from rag_service.src.query_rewriter import create_rewriter, rewrite_query
+from rag_service.src.query_router import create_router, route_query
 
 rewriter = create_rewriter()
 router = create_router()

@@ -3,19 +3,19 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel, Field
 import os
 
-from src.loader import load_pdf
-from src.splitter import split_documents
-from src.config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL_NAME
+from rag_service.src.loader import load_pdf
+from rag_service.src.splitter import split_documents
+from rag_service.src.config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL_NAME
 
-from src.embeddings import get_embedding_model
-from src.vectorstore import load_vectorstore, create_vectorstore, save_vectorstore, save_index_metadata, load_index_metadata, calculate_bytes_hash
-from src.retriever import get_retriever
+from rag_service.src.embeddings import get_embedding_model
+from rag_service.src.vectorstore import load_vectorstore, create_vectorstore, save_vectorstore, save_index_metadata, load_index_metadata, calculate_bytes_hash
+from rag_service.src.retriever import get_retriever
 
-from src.bm25_retriever import load_bm25_index, bm25_search_session, create_bm25_index, save_bm25_index
-from src.hybrid_retriever import HybridRetriever
-from src.reranker import CrossEncoderReranker
+from rag_service.src.bm25_retriever import load_bm25_index, bm25_search_session, create_bm25_index, save_bm25_index
+from rag_service.src.hybrid_retriever import HybridRetriever
+from rag_service.src.reranker import CrossEncoderReranker
 
-from src.document_registry import add_document, get_document_by_hash_and_session, generate_doc_id, load_registry, save_registry
+from rag_service.src.document_registry import add_document, get_document_by_hash_and_session, generate_doc_id, load_registry, save_registry
 
 
 # FASTAPI Application
@@ -47,18 +47,18 @@ class RetrievalResponse(BaseModel):
 
 # Index paths
 
-FAISS_PATH = 'indexes/app_faiss'
-BM25_PATH = 'indexes/app_bm25.pkl'
+FAISS_PATH = 'rag_service/indexes/app_faiss'
+BM25_PATH = 'rag_service/indexes/app_bm25.pkl'
 
 # metadata describing current index configuration
-METADATA_PATH = 'indexes/metadata.json'
+METADATA_PATH = 'rag_service/indexes/metadata.json'
 
 # Registry containing info about individual documents
-REGISTRY_PATH = 'indexes/documents.json'
+REGISTRY_PATH = 'rag_service/indexes/documents.json'
 
 # Data path - uploaded pdfs will be stored here
 
-DATA_DIR = 'data'
+DATA_DIR = 'rag_service/data'
 
 # load retrieval components
 

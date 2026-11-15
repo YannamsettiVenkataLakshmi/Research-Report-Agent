@@ -1,7 +1,7 @@
 import pickle
 
 from rank_bm25 import BM25Okapi
-from src.preprocessing import TechnicalPreprocessor
+from rag_service.src.preprocessing import TechnicalPreprocessor
 
 preprocessor = TechnicalPreprocessor()
 
